@@ -149,3 +149,34 @@ def evaluate(model, criterion, postprocessors, data_loader, base_ds, device, out
         stats['PQ_th'] = panoptic_res["Things"]
         stats['PQ_st'] = panoptic_res["Stuff"]
     return stats, coco_evaluator
+
+import torch_xla
+import torch_xla.core.xla_model as xm
+import torch_xla.debug.metrics as met
+
+@torch.no_grad()
+def tpu_evaluate(model, criterion, postprocessors, data_loader, base_ds, device, output_dir):
+    model.eval()
+    criterion.eval()
+    
+    cnt = 0
+    total = len(data_loader)
+    for samples, targets in data_loader:
+        print('test')
+        samples = samples.to(device)
+        targets = [{k: v.to(device) for k, v in t.items()} for t in targets]
+
+        outputs = model(samples)
+        loss_dict = criterion(outputs, targets)
+        weight_dict = criterion.weight_dict
+
+        loss = loss_dict['loss_giou']
+
+        xm.master_print(
+            'Number: {}/{}, Loss:{}'.format(
+                cnt + 1, total, loss.item()
+            )
+        )
+        cnt += 1
+        xm.master_print(met.metrics_report())
+        exit()

@@ -17,6 +17,8 @@ from .segmentation import (DETRsegm, PostProcessPanoptic, PostProcessSegm,
                            dice_loss, sigmoid_focal_loss)
 from .transformer import build_transformer
 
+import torch_xla
+import torch_xla.core.xla_model as xm
 
 class DETR(nn.Module):
     """ This is the DETR module that performs object detection """
@@ -315,7 +317,10 @@ def build(args):
         # for panoptic, we just add a num_classes that is large enough to hold
         # max_obj_id + 1, but the exact value doesn't really matter
         num_classes = 250
-    device = torch.device(args.device)
+    if args.device == 'tpu':
+        device = xm.xla_device()
+    else:
+        device = torch.device(args.device)
 
     backbone = build_backbone(args)
 
@@ -348,7 +353,7 @@ def build(args):
         losses += ["masks"]
     criterion = SetCriterion(num_classes, matcher=matcher, weight_dict=weight_dict,
                              eos_coef=args.eos_coef, losses=losses)
-    criterion.to(device)
+    # criterion.to(device)
     postprocessors = {'bbox': PostProcess()}
     if args.masks:
         postprocessors['segm'] = PostProcessSegm()
